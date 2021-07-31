@@ -2,18 +2,48 @@
 #include "lio_sam/cloud_info.h"
 
 // Velodyne
-struct PointXYZIRT
-{
+// struct PointXYZIRT
+// {
+//     PCL_ADD_POINT4D
+//     PCL_ADD_INTENSITY;
+//     uint16_t ring;
+//     float time;
+//     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+// } EIGEN_ALIGN16;
+
+// POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZIRT,  
+//     (float, x, x) (float, y, y) (float, z, z) (float, intensity, intensity)
+//     (uint16_t, ring, ring) (float, time, time)
+// )
+
+// struct PointXYZIRT
+// {
+//     PCL_ADD_POINT4D
+//     PCL_ADD_INTENSITY;
+//     uint16_t ring;
+//     float time;
+//     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+// } EIGEN_ALIGN16;
+
+// POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZIRT,  
+//     (float, x, x) (float, y, y) (float, z, z) (float, intensity, intensity)
+//     (uint16_t, ring, ring) (float, time, time)
+// )
+
+
+struct PointXYZIRT {
     PCL_ADD_POINT4D
-    PCL_ADD_INTENSITY;
-    uint16_t ring;
+
+    uint8_t intensity;
+    uint8_t ring;
     float time;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
 
-POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZIRT,  
-    (float, x, x) (float, y, y) (float, z, z) (float, intensity, intensity)
-    (uint16_t, ring, ring) (float, time, time)
+POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZIRT,
+                                   (float, x, x)(float, y, y)
+                                           (float, z, z)(uint8_t, intensity, intensity)
+                                           (uint8_t, ring, ring)
 )
 
 // Ouster
