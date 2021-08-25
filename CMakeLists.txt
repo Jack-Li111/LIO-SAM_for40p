@@ -18,6 +18,8 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   nav_msgs
   message_generation
+  geometry_msgs
+  geodesy
 )
 
 find_package(OpenMP REQUIRED)

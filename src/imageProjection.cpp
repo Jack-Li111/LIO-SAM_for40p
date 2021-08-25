@@ -175,10 +175,27 @@ public:
     {
         sensor_msgs::Imu thisImu = imuConverter(*imuMsg);
 
+        //  cout << std::setprecision(6);
+        // cout << "IMU acc: " << endl;
+        // cout << "x: " << imuMsg->linear_acceleration.x << 
+        //       ", y: " << imuMsg->linear_acceleration.y << 
+        //       ", z: " << imuMsg->linear_acceleration.z << endl;
+        // cout << "IMU gyro: " << endl;
+        // cout << "x: " << imuMsg->angular_velocity.x << 
+        //       ", y: " << imuMsg->angular_velocity.y << 
+        //       ", z: " << imuMsg->angular_velocity.z << endl;
+        // double imuRoll, imuPitch, imuYaw;
+        // tf::Quaternion orientation;
+        // tf::quaternionMsgToTF(imuMsg->orientation, orientation);
+        // tf::Matrix3x3(orientation).getRPY(imuRoll, imuPitch, imuYaw);
+        // cout << "IMU roll pitch yaw: " << endl;
+        // cout << "imuMsg->orientation: " <<imuMsg->orientation.x<<" "<<imuMsg->orientation.y<<" "<<imuMsg->orientation.z<<" "<<imuMsg->orientation.w<<" "<< endl;
+        // cout << "roll: " << imuRoll << ", pitch: " << imuPitch << ", yaw: " << imuYaw << endl << endl;
+
         std::lock_guard<std::mutex> lock1(imuLock);
         imuQueue.push_back(thisImu);
 
-        // debug IMU data
+        //debug IMU data
         // cout << std::setprecision(6);
         // cout << "IMU acc: " << endl;
         // cout << "x: " << thisImu.linear_acceleration.x << 
@@ -188,11 +205,12 @@ public:
         // cout << "x: " << thisImu.angular_velocity.x << 
         //       ", y: " << thisImu.angular_velocity.y << 
         //       ", z: " << thisImu.angular_velocity.z << endl;
-        // double imuRoll, imuPitch, imuYaw;
-        // tf::Quaternion orientation;
+        // //double imuRoll, imuPitch, imuYaw;
+        // //tf::Quaternion orientation;
         // tf::quaternionMsgToTF(thisImu.orientation, orientation);
         // tf::Matrix3x3(orientation).getRPY(imuRoll, imuPitch, imuYaw);
         // cout << "IMU roll pitch yaw: " << endl;
+        // cout << "thisImu.orientation: " <<thisImu.orientation.x<<" "<<thisImu.orientation.y<<" "<<thisImu.orientation.z<<" "<<thisImu.orientation.w<<" "<< endl;
         // cout << "roll: " << imuRoll << ", pitch: " << imuPitch << ", yaw: " << imuYaw << endl << endl;
     }
 
@@ -230,6 +248,18 @@ public:
         currentCloudMsg = cloudQueue.front();
         cloudQueue.pop_front();
         pcl::fromROSMsg(currentCloudMsg, *laserCloudIn);
+        
+        //激光雷达x轴调整到车辆坐标系 Author: lzg
+        pcl::PointCloud<PointXYZIRT>::Ptr transformed_cloud(new pcl::PointCloud<PointXYZIRT>());
+        Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+        transform.rotate(Eigen::AngleAxisf(gpsExtrin[5],Eigen::Vector3f::UnitZ())*
+                        Eigen::AngleAxisf(0,Eigen::Vector3f::UnitY())*
+                        Eigen::AngleAxisf(0,Eigen::Vector3f::UnitX()));
+        // transform.translation() << 1.15, 0, 1.93;
+        //std::cout<<"gpsExtrin[5]="<<gpsExtrin[5]<<std::endl;
+        transform.translation() << 0, 0, 0;
+        pcl::transformPointCloud(*laserCloudIn, *transformed_cloud,transform);
+        *laserCloudIn = *transformed_cloud;
 
         // get timestamp
         cloudHeader = currentCloudMsg.header;
@@ -325,9 +355,14 @@ public:
             double currentImuTime = thisImuMsg.header.stamp.toSec();
 
             // get roll, pitch, and yaw estimation for this scan
-            if (currentImuTime <= timeScanCur)
-                imuRPY2rosRPY(&thisImuMsg, &cloudInfo.imuRollInit, &cloudInfo.imuPitchInit, &cloudInfo.imuYawInit);
-
+            if (currentImuTime <= timeScanCur){
+                imuRPY2rosRPY(&thisImuMsg, &cloudInfo.imuRollInit, &cloudInfo.imuPitchInit, &cloudInfo.imuYawInit); 
+                
+                //Author: lzg
+                cloudInfo.imuPitchInit = -cloudInfo.imuPitchInit; //左手系和外参标定无效，临时解决措施。
+                cloudInfo.imuYawInit += M_PI/2 - 0.01832; //启动位置调整到x轴 ???这个角度怎么来的
+            }
+                
             if (currentImuTime > timeScanEnd + 0.01)
                 break;
 

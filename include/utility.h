@@ -11,6 +11,8 @@
 #include <sensor_msgs/NavSatFix.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
+#include <geodesy/utm.h>
+#include <geographic_msgs/GeoPointStamped.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
@@ -24,11 +26,12 @@
 #include <pcl/common/common.h>
 #include <pcl/common/transforms.h>
 #include <pcl/registration/icp.h>
-#include <pcl/io/pcd_io.h>
+#include <pcl/io/ply_io.h>
 #include <pcl/filters/filter.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/crop_box.h> 
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/filters/passthrough.h>
 
 #include <tf/LinearMath/Quaternion.h>
 #include <tf/transform_listener.h>
@@ -105,6 +108,7 @@ public:
     vector<double> extRotV;
     vector<double> extRPYV;
     vector<double> extTransV;
+    vector<double> gpsExtrin;
     Eigen::Matrix3d extRot;
     Eigen::Matrix3d extRPY;
     Eigen::Vector3d extTrans;
@@ -120,6 +124,13 @@ public:
     float odometrySurfLeafSize;
     float mappingCornerLeafSize;
     float mappingSurfLeafSize ;
+
+    float passthrough_minx;
+    float passthrough_maxx;
+    float passthrough_miny;
+    float passthrough_maxy;
+    float passthrough_minz;
+    float passthrough_maxz;
 
     float z_tollerance; 
     float rotation_tollerance;
@@ -186,6 +197,7 @@ public:
         nh.param<vector<double>>("lio_sam/extrinsicRot", extRotV, vector<double>());
         nh.param<vector<double>>("lio_sam/extrinsicRPY", extRPYV, vector<double>());
         nh.param<vector<double>>("lio_sam/extrinsicTrans", extTransV, vector<double>());
+        nh.param<vector<double>>("lio_sam/gps_extrinsic", gpsExtrin, vector<double>());
         extRot = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRotV.data(), 3, 3);
         extRPY = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extRPYV.data(), 3, 3);
         extTrans = Eigen::Map<const Eigen::Matrix<double, -1, -1, Eigen::RowMajor>>(extTransV.data(), 3, 1);
@@ -223,6 +235,13 @@ public:
         nh.param<float>("lio_sam/globalMapVisualizationPoseDensity", globalMapVisualizationPoseDensity, 10.0);
         nh.param<float>("lio_sam/globalMapVisualizationLeafSize", globalMapVisualizationLeafSize, 1.0);
 
+        nh.param<float>("lio_sam/passthrough_minx", passthrough_minx, -90);
+        nh.param<float>("lio_sam/passthrough_maxx", passthrough_maxx, 90);
+        nh.param<float>("lio_sam/passthrough_miny", passthrough_miny, -90);
+        nh.param<float>("lio_sam/passthrough_maxy", passthrough_maxy, 90);
+        nh.param<float>("lio_sam/passthrough_minz", passthrough_minz, -90);
+        nh.param<float>("lio_sam/passthrough_maxz", passthrough_maxz, 90);
+
         usleep(100);
     }
 
@@ -244,6 +263,9 @@ public:
         // rotate roll pitch yaw
         Eigen::Quaterniond q_from(imu_in.orientation.w, imu_in.orientation.x, imu_in.orientation.y, imu_in.orientation.z);
         Eigen::Quaterniond q_final = q_from * extQRPY;
+        // std::cout<<"extQRPY="<<extQRPY.x()<<" "<<extQRPY.y()<<" "<<extQRPY.z()<<" "<<extQRPY.w()<<" "<<std::endl;
+        // std::cout<<"extRPY="<<extRPY<<std::endl;
+        q_final.normalize();
         imu_out.orientation.x = q_final.x();
         imu_out.orientation.y = q_final.y();
         imu_out.orientation.z = q_final.z();
