@@ -1,16 +1,20 @@
 lio_sam:
 
-  # Topics
-  # pointCloudTopic: "points_raw"               # Point cloud data
-  # imuTopic: "imu_correct"                         # IMU data
-  # odomTopic: "odometry/imu"                   # IMU pre-preintegration odometry, same frequency as IMU
-  # gpsTopic: "odometry/gpsz"                   # GPS odometry topic from navsat, see module_navsat.launch file
-
-  pointCloudTopic: "/driver/pandar/point_cloud"               # Point cloud data
+  # pointCloudTopic: "/driver/pandar/point_cloud"               # Point cloud data
+  pointCloudTopic: "/driver/hesai/pandar"   #pandar_with_timestamp topic需要修改为车上的
   imuTopic: "/Inertial/imu/data"                         # IMU data
   odomTopic: "odometry/imu"                   # IMU pre-preintegration odometry, same frequency as IMU
   gpsTopic: "/Inertial/gps/fix"                   # GPS odometry topic from navsat, see module_navsat.launch file
   #gpsTopic: "/gps"                   # GPS odometry topic from navsat, see module_navsat.launch file
+
+  # utm
+    #sjtu
+  # utm_x: 349350
+  # utm_y: 3432459
+
+ #changshu
+  utm_x: 288850
+  utm_y: 3495959
 
   # Frames
   lidarFrame: "base_link"
@@ -31,7 +35,7 @@ lio_sam:
   # Sensor Settings
   N_SCAN: 40                                  # number of lidar channel (i.e., 16, 32, 64, 128)
   Horizon_SCAN: 1800                          # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048)
-  timeField: "time"                           # point timestamp field, Velodyne - "time", Ouster - "t"
+  timeField: "timestamp"                           # point timestamp field, Velodyne - "time", Ouster - "t"  //timestamp
   downsampleRate: 1                           # default: 1. Downsample your data if too many points. i.e., 16 = 64 / 4, 16 = 16 / 1 
   lidarMinRange: 1.0                          # default: 1.0, minimum lidar range to be used
   lidarMaxRange: 1000.0                       # default: 1000.0, maximum lidar range to be used
@@ -39,7 +43,7 @@ lio_sam:
   # IMU Settings
   imuAccNoise: 3.9939570888238808e-03
   imuGyrNoise: 1.5636343949698187e-03
-  imuAccBiasN: 6.4356659353532566e-05
+  imuAccBiasN: 6.4356659353532566e-05 #6.4356659353532566e-05
   imuGyrBiasN: 3.5640318696367613e-05
   imuGravity: 9.80511
   imuRPYWeight: 0.01
@@ -47,7 +51,7 @@ lio_sam:
   #Extrinsics (gps -> lidar) x,y,z,r,p,y 用于因子图gps因子
   gps_extrinsic: [1.15, 0.0, 1.4, 0, 0, 1.5525]
   # Extrinsics (lidar -> IMU)(IMU->lidar?)
-  extrinsicTrans: [1.15, 0.0, 1.4]
+  extrinsicTrans: [-1.15, 0.0, -1.4]
   # extrinsicRot: [-1, 0, 0,
   #                 0, 1, 0,
   #                 0, 0, -1]
@@ -69,11 +73,11 @@ lio_sam:
   #                 0, 0, 1]
 
   #passthrough Author: lzg
-  passthrough_minx: -50
-  passthrough_maxx: 50
-  passthrough_miny: -50
-  passthrough_maxy: 50
-  passthrough_minz: -2
+  passthrough_minx: -100
+  passthrough_maxx: 100
+  passthrough_miny: -100
+  passthrough_maxy: 100
+  passthrough_minz: -10
   passthrough_maxz: 20
   
   # LOAM feature threshold

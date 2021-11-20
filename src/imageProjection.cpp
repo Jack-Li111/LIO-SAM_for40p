@@ -30,21 +30,37 @@
 //     (uint16_t, ring, ring) (float, time, time)
 // )
 
+//pandar40p_notimestamp
+// struct PointXYZIRT {
+//     PCL_ADD_POINT4D
 
+//     uint8_t intensity;
+//     uint8_t ring;
+//     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+// } EIGEN_ALIGN16;
+
+// POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZIRT,
+//                                    (float, x, x)(float, y, y)
+//                                            (float, z, z)(uint8_t, intensity, intensity)
+//                                            (uint8_t, ring, ring)
+// )
+
+//pandar40p_timestamp author:lzg
 struct PointXYZIRT {
     PCL_ADD_POINT4D
 
-    uint8_t intensity;
-    uint8_t ring;
-    float time;
+    float intensity;
+    double timestamp;
+    u_int16_t ring;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
 
 POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZIRT,
                                    (float, x, x)(float, y, y)
-                                           (float, z, z)(uint8_t, intensity, intensity)
-                                           (uint8_t, ring, ring)
+                                           (float, z, z)(float, intensity, intensity)(double, timestamp, timestamp)
+                                           (u_int16_t, ring, ring)
 )
+
 
 // Ouster
 // struct PointXYZIRT {
@@ -173,6 +189,7 @@ public:
 
     void imuHandler(const sensor_msgs::Imu::ConstPtr& imuMsg)
     {
+        //std::cout<<std::fixed<<std::setprecision(8)<<"imu_time="<<imuMsg->header.<<std::endl;
         sensor_msgs::Imu thisImu = imuConverter(*imuMsg);
 
         //  cout << std::setprecision(6);
@@ -224,10 +241,8 @@ public:
     {
         if (!cachePointCloud(laserCloudMsg))
             return;
-
         if (!deskewInfo())
             return;
-
         projectPointCloud();
 
         cloudExtraction();
@@ -247,9 +262,18 @@ public:
         // convert cloud
         currentCloudMsg = cloudQueue.front();
         cloudQueue.pop_front();
+
+        //pcl::PointCloud<PointXYZIRT>::Ptr temp_laserCloudIn(new pcl::PointCloud<PointXYZIRT>());;
         pcl::fromROSMsg(currentCloudMsg, *laserCloudIn);
-        
-        //激光雷达x轴调整到车辆坐标系 Author: lzg
+        // for(int i=0; i<laserCloudIn->points.size(); i++){
+        //     std::cout<<std::fixed<<std::setprecision(8)<<"laserCloudIn->points[i].x="<<laserCloudIn->points[i].x<<std::endl;
+        //     std::cout<<std::fixed<<std::setprecision(8)<<"laserCloudIn->points[i].y="<<laserCloudIn->points[i].y<<std::endl;
+        //     std::cout<<std::fixed<<std::setprecision(8)<<"laserCloudIn->points[i].z="<<laserCloudIn->points[i].z<<std::endl;
+        //     std::cout<<std::fixed<<std::setprecision(8)<<"laserCloudIn->points[i].i="<<int(laserCloudIn->points[i].intensity)<<std::endl;
+        //     std::cout<<std::fixed<<std::setprecision(8)<<"laserCloudIn->points[i].ring="<<int(laserCloudIn->points[i].ring)<<std::endl;
+        //     std::cout<<std::fixed<<std::setprecision(8)<<"laserCloudIn->points[i].timestamp="<<laserCloudIn->points[i].timestamp<<std::endl;
+        // }
+        //激光雷达x轴调整到车辆坐标系x轴方向，不做平移 Author: lzg
         pcl::PointCloud<PointXYZIRT>::Ptr transformed_cloud(new pcl::PointCloud<PointXYZIRT>());
         Eigen::Affine3f transform = Eigen::Affine3f::Identity();
         transform.rotate(Eigen::AngleAxisf(gpsExtrin[5],Eigen::Vector3f::UnitZ())*
@@ -264,7 +288,13 @@ public:
         // get timestamp
         cloudHeader = currentCloudMsg.header;
         timeScanCur = cloudHeader.stamp.toSec();
-        timeScanEnd = timeScanCur + laserCloudIn->points.back().time; // Velodyne
+
+        //pandar时间戳输出是每个点的绝对时间 author:lzg
+        //timeScanEnd = timeScanCur + laserCloudIn->points.back().timestamp; // Velodyne
+        timeScanEnd = laserCloudIn->points.back().timestamp; // Velodyne
+        // std::cout<<std::fixed<<std::setprecision(8)<<"timeScanCur="<<timeScanCur<<std::endl;
+        // std::cout<<std::fixed<<std::setprecision(8)<<"timeScanEnd="<<timeScanEnd<<std::endl;
+
         // timeScanEnd = timeScanCur + (float)laserCloudIn->points.back().t / 1000000000.0; // Ouster
 
         // check dense flag
@@ -510,15 +540,18 @@ public:
         *posXCur = 0; *posYCur = 0; *posZCur = 0;
 
         // If the sensor moves relatively slow, like walking speed, positional deskew seems to have little benefits. Thus code below is commented.
+        //author:lzg 原代码这里是注释掉的
+        if (cloudInfo.odomAvailable == false || odomDeskewFlag == false)
+            return;
 
-        // if (cloudInfo.odomAvailable == false || odomDeskewFlag == false)
-        //     return;
+        float ratio = (relTime - timeScanCur) / (timeScanEnd - timeScanCur);
 
-        // float ratio = relTime / (timeScanEnd - timeScanCur);
-
-        // *posXCur = ratio * odomIncreX;
-        // *posYCur = ratio * odomIncreY;
-        // *posZCur = ratio * odomIncreZ;
+        *posXCur = ratio * odomIncreX;
+        *posYCur = ratio * odomIncreY;
+        *posZCur = ratio * odomIncreZ;
+        // std::cout<<"odomIncreX="<<odomIncreX<<std::endl;
+        // std::cout<<"odomIncreY="<<odomIncreY<<std::endl;
+        // std::cout<<"odomIncreZ="<<odomIncreZ<<std::endl;
     }
 
     PointType deskewPoint(PointType *point, double relTime)
@@ -526,7 +559,9 @@ public:
         if (deskewFlag == -1 || cloudInfo.imuAvailable == false)
             return *point;
 
-        double pointTime = timeScanCur + relTime;
+        //pandar时间戳输出是每个点的绝对时间 author:lzg
+        //double pointTime = timeScanCur + relTime;
+        double pointTime = relTime;
 
         float rotXCur, rotYCur, rotZCur;
         findRotation(pointTime, &rotXCur, &rotYCur, &rotZCur);
@@ -556,6 +591,7 @@ public:
     void projectPointCloud()
     {
         int cloudSize = laserCloudIn->points.size();
+        //std::cout<<std::fixed<<std::setprecision(8)<<"laserCloudIn.timestamp="<<laserCloudIn->header.stamp<<std::endl;
         // range image projection
         for (int i = 0; i < cloudSize; ++i)
         {
@@ -579,7 +615,10 @@ public:
             float horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
 
             static float ang_res_x = 360.0/float(Horizon_SCAN);
-            int columnIdn = -round((horizonAngle-90.0)/ang_res_x) + Horizon_SCAN/2;
+
+            //pandar结合手册确认初始位置 author:lzg 
+            // int columnIdn = -round((horizonAngle-90.0)/ang_res_x) + Horizon_SCAN/2;
+            int columnIdn = -round((horizonAngle-135.0)/ang_res_x) + Horizon_SCAN/2;
             if (columnIdn >= Horizon_SCAN)
                 columnIdn -= Horizon_SCAN;
 
@@ -589,7 +628,7 @@ public:
             if (rangeMat.at<float>(rowIdn, columnIdn) != FLT_MAX)
                 continue;
 
-            thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].time); // Velodyne
+            thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].timestamp); // Velodyne
             // thisPoint = deskewPoint(&thisPoint, (float)laserCloudIn->points[i].t / 1000000000.0); // Ouster
 
             rangeMat.at<float>(rowIdn, columnIdn) = range;

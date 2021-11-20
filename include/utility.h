@@ -159,6 +159,8 @@ public:
     float globalMapVisualizationPoseDensity;
     float globalMapVisualizationLeafSize;
 
+    double utm_x,utm_y;
+
     ParamServer()
     {
         nh.param<std::string>("/robot_id", robot_id, "roboat");
@@ -241,6 +243,9 @@ public:
         nh.param<float>("lio_sam/passthrough_maxy", passthrough_maxy, 90);
         nh.param<float>("lio_sam/passthrough_minz", passthrough_minz, -90);
         nh.param<float>("lio_sam/passthrough_maxz", passthrough_maxz, 90);
+
+        nh.param<double>("lio_sam/utm_x", utm_x, 0);
+        nh.param<double>("lio_sam/utm_y", utm_y, 0);
 
         usleep(100);
     }

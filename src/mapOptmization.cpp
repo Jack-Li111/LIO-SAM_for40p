@@ -252,8 +252,22 @@ public:
 
         // extract info and feature cloud
         cloudInfo = *msgIn;
-        pcl::fromROSMsg(msgIn->cloud_corner,  *laserCloudCornerLast);
-        pcl::fromROSMsg(msgIn->cloud_surface, *laserCloudSurfLast);
+
+        //增加高度滤波 author:lzg
+        pcl::PointCloud<PointType>::Ptr temp_laserCloudCornerLast(new pcl::PointCloud<PointType>());
+        pcl::PointCloud<PointType>::Ptr temp_laserCloudSurfLast(new pcl::PointCloud<PointType>());
+        pcl::fromROSMsg(msgIn->cloud_corner,  *temp_laserCloudCornerLast);
+        pcl::fromROSMsg(msgIn->cloud_surface, *temp_laserCloudSurfLast);
+
+        pcl::PassThrough<PointType> z_filter;
+        z_filter.setFilterFieldName("z");
+        z_filter.setFilterLimits(passthrough_minz,passthrough_maxz);
+
+        z_filter.setInputCloud(temp_laserCloudCornerLast);
+        z_filter.filter(*laserCloudCornerLast);
+
+        z_filter.setInputCloud(temp_laserCloudSurfLast);
+        z_filter.filter(*laserCloudSurfLast);
 
         std::lock_guard<std::mutex> lock(mtx);
 
@@ -316,12 +330,16 @@ public:
 
         geodesy::UTMPoint utm_point;
         geodesy::fromMsg(gps_msg->position, utm_point);
-        //TODO 写入配置文件中
+        //写入配置文件中 author:lzg
         temp_gpsodom.header = gpsMsg->header;;
-        temp_gpsodom.pose.pose.position.x = utm_point.easting - 349350;
-        temp_gpsodom.pose.pose.position.y = utm_point.northing - 3432459;
+        temp_gpsodom.pose.pose.position.x = utm_point.easting - utm_x;
+        temp_gpsodom.pose.pose.position.y = utm_point.northing - utm_y;
+        // std::cout<<"utm_x="<<utm_x<<std::endl;
+        //  std::cout<<"utm_y="<<utm_y<<std::endl;
         temp_gpsodom.pose.pose.position.z = utm_point.altitude;
+        temp_gpsodom.pose.pose.orientation.w=1;
 
+        //gps转换到lidar坐标系
         if(global_angle != 999){
             temp_gpsodom.pose.pose.position.x += gpsExtrin[0] * cos(global_angle) - gpsExtrin[1] * sin(global_angle);
             temp_gpsodom.pose.pose.position.y += gpsExtrin[0] * sin(global_angle) + gpsExtrin[1] * cos(global_angle);
@@ -662,6 +680,9 @@ public:
         // Align clouds
         icp.setInputSource(cureKeyframeCloud);
         icp.setInputTarget(prevKeyframeCloud);
+        std::cout<<"saveply"<<std::endl;
+        pcl::io::savePLYFileASCII("../cureKeyframeCloud.ply", *cureKeyframeCloud);
+        pcl::io::savePLYFileASCII("../prevKeyframeCloud.ply", *prevKeyframeCloud);
         pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
         icp.align(*unused_result);
 
@@ -1351,6 +1372,8 @@ public:
         transformTobeMapped[2] += matX.at<float>(2, 0);
         transformTobeMapped[3] += matX.at<float>(3, 0);
         transformTobeMapped[4] += matX.at<float>(4, 0);
+        //transformTobeMapped[5] = 0; //z轴强制为0 author:lzg
+        //std::cout<<"transformTobeMapped[5]="<<transformTobeMapped[5]<<std::endl;;
         transformTobeMapped[5] += matX.at<float>(5, 0);
 
         float deltaR = sqrt(
